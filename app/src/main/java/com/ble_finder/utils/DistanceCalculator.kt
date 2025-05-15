@@ -23,7 +23,7 @@ object DistanceCalculator {
         // Using Log-distance path loss model
         // d = 10^((txPower - rssi)/(10 * N))
         val ratio = (txPower - rssi) / (10.0 * N)
-        return 10.0.pow(ratio)
+        return ratio
     }
 
     /**
