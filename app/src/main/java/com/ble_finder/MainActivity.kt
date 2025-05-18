@@ -3,6 +3,7 @@ package com.ble_finder
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanResult
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -18,17 +19,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.ble_finder.utils.DistanceCalculator
 import com.ble_finder.viewmodel.MainViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ble_finder.data.SavedDevice
 import kotlin.math.absoluteValue
 
 class MainActivity : ComponentActivity() {
@@ -86,7 +92,9 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BLEFinderScreen() {
         val scanResults by viewModel.scanResults.collectAsStateWithLifecycle()
+        val savedDevices by viewModel.savedDevices.collectAsStateWithLifecycle()
         val isScanning by remember { mutableStateOf(viewModel.isScanning()) }
+        var selectedTab by remember { mutableStateOf(0) }
 
         Scaffold(
             topBar = {
@@ -115,51 +123,83 @@ class MainActivity : ComponentActivity() {
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                if (scanResults.isEmpty()) {
-                    EmptyState()
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(
-                            scanResults.sortedBy {
-                                DistanceCalculator.calculateDistance(it.rssi, it.txPower)
-                            }
-                        ) { result ->
-                            DeviceItem(result)
-                        }
-                    }
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Scan Results") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Saved Devices") }
+                    )
+                }
+
+                when (selectedTab) {
+                    0 -> ScanResultsList(scanResults, savedDevices)
+                    1 -> SavedDevicesList(savedDevices)
                 }
             }
         }
     }
 
     @Composable
-    fun EmptyState() {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "No beacons found\nTap the scan button to start searching",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    fun ScanResultsList(scanResults: List<ScanResult>, savedDevices: List<SavedDevice>) {
+        if (scanResults.isEmpty()) {
+            EmptyState()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    scanResults.sortedBy {
+                        DistanceCalculator.calculateDistance(it.rssi, it.txPower)
+                    }
+                ) { result ->
+                    val isSaved = savedDevices.any { it.macAddress == result.device.address }
+                    DeviceItem(result, isSaved)
+                }
+            }
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
+    @Composable
+    fun SavedDevicesList(savedDevices: List<SavedDevice>) {
+        if (savedDevices.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No saved devices\nScan and save devices to monitor them",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(savedDevices) { device ->
+                    SavedDeviceItem(device)
+                }
+            }
+        }
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    fun DeviceItem(result: android.bluetooth.le.ScanResult) {
+    fun DeviceItem(result: ScanResult, isSaved: Boolean) {
         val distance = DistanceCalculator.calculateDistance(result.rssi, result.txPower)
-        val readableDistance = DistanceCalculator.getReadableDistance(distance)
 
         ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
@@ -186,11 +226,19 @@ class MainActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    SignalStrengthIndicator(result.rssi)
+                    if (!isSaved) {
+                        IconButton(onClick = { viewModel.saveDevice(result) }) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Save Device",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = MaterialTheme.shapes.small
@@ -214,16 +262,136 @@ class MainActivity : ComponentActivity() {
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Column(horizontalAlignment = Alignment.End) {
+                        SignalStrengthIndicator(result.rssi)
+                    }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun SavedDeviceItem(device: SavedDevice) {
+        var showDialog by remember { mutableStateOf(false) }
+        var sliderPosition by remember { mutableStateOf(device.notificationThresholdDistance.toFloat()) }
+
+        if (showDialog) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                title = { Text("Set Range Threshold") },
+                text = {
+                    Column {
+                        Text("Set the distance threshold for out-of-range notifications")
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Slider(
+                            value = sliderPosition,
+                            onValueChange = { sliderPosition = it },
+                            valueRange = 1f..20f,
+                            steps = 18
+                        )
+                        Text("${sliderPosition.toInt()} meters")
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.updateNotificationThreshold(device, sliderPosition.toDouble())
+                            showDialog = false
+                        }
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = device.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = device.macAddress,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row {
+                        IconButton(onClick = { showDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = { viewModel.deleteDevice(device) }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
                             Text(
                                 text = "Status",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             Text(
-                                text = getDistanceLabel(distance),
+                                text = if (device.isInRange) "In Range" else "Out of Range",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = getDistanceColor(distance),
+                                color = if (device.isInRange) 
+                                    Color(0xFF4CAF50) else Color(0xFFF44336),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Threshold",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = "${device.notificationThresholdDistance.toInt()}m",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -234,12 +402,35 @@ class MainActivity : ComponentActivity() {
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DetailItem(label = "RSSI", value = "${result.rssi} dBm")
-                    DetailItem(label = "Tx Power", value = "${result.txPower} dBm")
+                    Text(
+                        text = "Notifications",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Switch(
+                        checked = device.notificationEnabled,
+                        onCheckedChange = { enabled ->
+                            viewModel.toggleNotifications(device, enabled)
+                        }
+                    )
                 }
             }
+        }
+    }
+
+    @Composable
+    fun EmptyState() {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "No beacons found\nTap the scan button to start searching",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 
