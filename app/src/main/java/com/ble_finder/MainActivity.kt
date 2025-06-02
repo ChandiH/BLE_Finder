@@ -103,10 +103,31 @@ class MainActivity : ComponentActivity() {
         val scanResults by viewModel.scanResults.collectAsStateWithLifecycle()
         val classicScanResults by viewModel.classicScanResults.collectAsStateWithLifecycle()
         val savedDevices by viewModel.savedDevices.collectAsStateWithLifecycle()
+        val saveResult by viewModel.saveResult.collectAsStateWithLifecycle()
         var isScanning by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf(0) }
         val currentActivity by activityRecognition.currentActivity.collectAsStateWithLifecycle()
         var showBluetoothDialog by remember { mutableStateOf(false) }
+
+        // Show save result snackbar
+        saveResult?.let { result ->
+            val snackbarHostState = remember { SnackbarHostState() }
+            LaunchedEffect(result) {
+                val message = when (result) {
+                    is MainViewModel.SaveResult.Success -> "Device '${result.deviceName}' saved successfully"
+                    is MainViewModel.SaveResult.Error -> "Error: ${result.message}"
+                }
+                snackbarHostState.showSnackbar(message)
+                viewModel.clearSaveResult()
+            }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+        }
 
         // Update scanning state
         LaunchedEffect(Unit) {
@@ -354,7 +375,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun DeviceItem(result: ScanResult, isSaved: Boolean) {
-        val distance = DistanceCalculator.calculateDistance(result.rssi, result.txPower)
+        val distance = DistanceCalculator.calculateDistance(result.rssi, result.txPower ?: -59)
 
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -385,7 +406,11 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     if (!isSaved) {
-                        IconButton(onClick = { viewModel.saveDevice(result) }) {
+                        IconButton(
+                            onClick = { 
+                                viewModel.saveDevice(result)
+                            }
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Save Device",

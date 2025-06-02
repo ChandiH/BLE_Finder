@@ -20,10 +20,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = DeviceRepository(AppDatabase.getDatabase(application).savedDeviceDao())
     private val notificationHelper = NotificationHelper(application)
 
+    private val _saveResult = MutableStateFlow<SaveResult?>(null)
+    val saveResult: StateFlow<SaveResult?> = _saveResult.asStateFlow()
+
     val scanResults: StateFlow<List<ScanResult>> = bleScanner.scanResults
     val classicScanResults: StateFlow<List<BluetoothDevice>> = classicScanner.scanResults
     val savedDevices: StateFlow<List<SavedDevice>> = repository.allSavedDevices
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    sealed class SaveResult {
+        data class Success(val deviceName: String) : SaveResult()
+        data class Error(val message: String) : SaveResult()
+    }
 
     fun startScan() {
         bleScanner.startScan()
@@ -51,8 +59,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveDevice(scanResult: ScanResult) {
         viewModelScope.launch {
-            repository.saveDevice(scanResult)
+            try {
+                repository.saveDevice(scanResult)
+                _saveResult.value = SaveResult.Success(scanResult.device.name ?: "Unknown Device")
+            } catch (e: Exception) {
+                _saveResult.value = SaveResult.Error(e.message ?: "Failed to save device")
+            }
         }
+    }
+
+    fun clearSaveResult() {
+        _saveResult.value = null
     }
 
     fun deleteDevice(device: SavedDevice) {

@@ -22,6 +22,16 @@ class ClassicBluetoothScanner(private val context: Context) {
     private val _scanResults = MutableStateFlow<List<BluetoothDevice>>(emptyList())
     val scanResults: StateFlow<List<BluetoothDevice>> = _scanResults.asStateFlow()
 
+    // Mock devices data
+    private val mockDevices = listOf(
+        MockDevice("Sony WH-1000XM4", "12:34:56:78:9A:BC"),
+        MockDevice("JBL Flip 5", "34:56:78:9A:BC:DE"),
+        MockDevice("Logitech Mouse", "56:78:9A:BC:DE:F0"),
+        MockDevice("Xbox Controller", "78:9A:BC:DE:F0:12")
+    )
+
+    data class MockDevice(val name: String, val address: String)
+
     private val receiver = object : BroadcastReceiver() {
         @SuppressLint("MissingPermission")
         override fun onReceive(context: Context, intent: Intent) {
@@ -44,17 +54,12 @@ class ClassicBluetoothScanner(private val context: Context) {
                 BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                     scanning = false
                     Log.d(TAG, "Classic Bluetooth discovery finished")
-                    // Restart discovery if we're still supposed to be scanning
-                    if (scanning) {
-                        startScan()
-                    }
                 }
             }
         }
     }
 
     init {
-        // Register for broadcasts when a device is discovered
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_FOUND)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
@@ -79,6 +84,9 @@ class ClassicBluetoothScanner(private val context: Context) {
             // Clear previous results
             _scanResults.value = emptyList()
             
+            // Add mock devices
+            addMockDevices()
+            
             // Start discovery
             bluetoothAdapter?.startDiscovery()
             scanning = true
@@ -87,6 +95,21 @@ class ClassicBluetoothScanner(private val context: Context) {
             Log.e(TAG, "Error starting scan: ${e.message}")
             scanning = false
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun addMockDevices() {
+        val currentList = mutableListOf<BluetoothDevice>()
+        
+        mockDevices.forEach { mockDevice ->
+            val device = bluetoothAdapter?.getRemoteDevice(mockDevice.address)
+            device?.let {
+                currentList.add(it)
+                Log.d(TAG, "Added mock device: ${mockDevice.name} (${mockDevice.address})")
+            }
+        }
+        
+        _scanResults.value = currentList
     }
 
     @SuppressLint("MissingPermission")

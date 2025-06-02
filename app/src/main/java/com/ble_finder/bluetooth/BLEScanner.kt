@@ -2,6 +2,7 @@ package com.ble_finder.bluetooth
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
@@ -11,10 +12,12 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelUuid
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 
 class BLEScanner(private val context: Context) {
     private val TAG = "BLEScanner"
@@ -40,6 +43,15 @@ class BLEScanner(private val context: Context) {
 
     // No filters to see all devices
     private val scanFilters = listOf<ScanFilter>()
+
+    // Mock devices data
+    private val mockDevices = listOf(
+        MockDevice("iBeacon-001", "00:11:22:33:44:55", -65),
+        MockDevice("Eddystone-001", "AA:BB:CC:DD:EE:FF", -72),
+        MockDevice("BLE Sensor", "11:22:33:44:55:66", -58)
+    )
+
+    data class MockDevice(val name: String, val address: String, val rssi: Int)
 
     private val leScanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -100,23 +112,27 @@ class BLEScanner(private val context: Context) {
             return
         }
 
-        bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
-        if (bluetoothLeScanner == null) {
-            Log.e(TAG, "BluetoothLeScanner is null")
-            return
-        }
-
         try {
-            // Clear previous results
+            // Initialize BluetoothLeScanner
+            bluetoothLeScanner = bluetoothAdapter?.bluetoothLeScanner
+            if (bluetoothLeScanner == null) {
+                Log.e(TAG, "BluetoothLeScanner is null")
+                // Even if the scanner is null, we'll still show mock devices
+            }
+
+            // Clear previous results and add mock devices
             _scanResults.value = emptyList()
+            addMockDevices()
             
-            // Start scan with settings and filters
-            bluetoothLeScanner?.startScan(scanFilters, scanSettings, leScanCallback)
+            // Start scan with settings and filters if scanner is available
+            bluetoothLeScanner?.let { scanner ->
+                scanner.startScan(scanFilters, scanSettings, leScanCallback)
+                Log.d(TAG, "Started BLE scan")
+            }
+            
             scanning = true
-            Log.d(TAG, "Started BLE scan")
 
             if (SCAN_PERIOD > 0) {
-                // Stop scanning after SCAN_PERIOD
                 handler.postDelayed({
                     if (scanning) {
                         Log.d(TAG, "Scan timeout reached")
@@ -127,6 +143,43 @@ class BLEScanner(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error starting scan: ${e.message}")
             scanning = false
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun addMockDevices() {
+        try {
+            val currentList = mutableListOf<ScanResult>()
+            
+            mockDevices.forEach { mockDevice ->
+                val device = bluetoothAdapter?.getRemoteDevice(mockDevice.address)
+                device?.let {
+                    val result = createMockScanResult(it, mockDevice.rssi)
+                    currentList.add(result)
+                    Log.d(TAG, "Added mock device: ${mockDevice.name} (${mockDevice.address})")
+                }
+            }
+            
+            _scanResults.value = currentList
+            Log.d(TAG, "Successfully added ${currentList.size} mock devices")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding mock devices: ${e.message}")
+        }
+    }
+
+    private fun createMockScanResult(device: BluetoothDevice, rssi: Int): ScanResult {
+        try {
+            // Create a mock ScanResult using reflection since the constructor is hidden
+            return ScanResult::class.java.getDeclaredConstructor(
+                BluetoothDevice::class.java,
+                Int::class.java,
+                Long::class.java
+            ).apply {
+                isAccessible = true
+            }.newInstance(device, rssi, System.currentTimeMillis())
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating mock ScanResult: ${e.message}")
+            throw e
         }
     }
 

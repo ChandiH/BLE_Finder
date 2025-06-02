@@ -8,14 +8,22 @@ class DeviceRepository(private val savedDeviceDao: SavedDeviceDao) {
     val allSavedDevices: Flow<List<SavedDevice>> = savedDeviceDao.getAllDevices()
 
     suspend fun saveDevice(scanResult: ScanResult) {
-        val device = SavedDevice(
-            macAddress = scanResult.device.address,
-            name = scanResult.device.name ?: "Unknown Device",
-            lastKnownRssi = scanResult.rssi,
-            lastSeenTimestamp = System.currentTimeMillis(),
-            isInRange = true,
-        )
-        savedDeviceDao.insertDevice(device)
+        try {
+            val distance = DistanceCalculator.calculateDistance(scanResult.rssi, scanResult.txPower ?: -59)
+            val device = SavedDevice(
+                macAddress = scanResult.device.address,
+                name = scanResult.device.name ?: "Unknown Device",
+                lastKnownRssi = scanResult.rssi,
+                lastSeenTimestamp = System.currentTimeMillis(),
+                isInRange = true,
+                notificationEnabled = true,
+                notificationThresholdDistance = distance * 1.5 // Set initial threshold to 1.5x current distance
+            )
+            savedDeviceDao.insertDevice(device)
+        } catch (e: Exception) {
+            // Handle any errors that might occur during saving
+            throw Exception("Failed to save device: ${e.message}")
+        }
     }
 
     suspend fun deleteDevice(device: SavedDevice) {
@@ -23,7 +31,7 @@ class DeviceRepository(private val savedDeviceDao: SavedDeviceDao) {
     }
 
     suspend fun updateDeviceStatus(scanResult: ScanResult) {
-        val distance = DistanceCalculator.calculateDistance(scanResult.rssi, scanResult.txPower)
+        val distance = DistanceCalculator.calculateDistance(scanResult.rssi, scanResult.txPower ?: -59)
         val device = savedDeviceDao.getDeviceByMacAddress(scanResult.device.address)
         
         device?.let {
