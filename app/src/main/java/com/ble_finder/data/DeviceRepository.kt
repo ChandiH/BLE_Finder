@@ -13,7 +13,7 @@ class DeviceRepository(private val savedDeviceDao: SavedDeviceDao) {
             name = scanResult.device.name ?: "Unknown Device",
             lastKnownRssi = scanResult.rssi,
             lastSeenTimestamp = System.currentTimeMillis(),
-            isInRange = true
+            isInRange = true,
         )
         savedDeviceDao.insertDevice(device)
     }

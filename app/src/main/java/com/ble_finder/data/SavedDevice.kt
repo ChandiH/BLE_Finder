@@ -12,5 +12,7 @@ data class SavedDevice(
     val lastSeenTimestamp: Long = System.currentTimeMillis(),
     val isInRange: Boolean = true,
     val notificationEnabled: Boolean = true,
-    val notificationThresholdDistance: Double = 10.0 // Default 10 meters
+    val notificationThresholdDistance: Double = 10.0, // Default 10 meters
+//    val distance: Double,
+//    val deviceType: String,
 ) 
