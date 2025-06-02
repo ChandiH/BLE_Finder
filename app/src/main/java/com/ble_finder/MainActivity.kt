@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,12 +36,14 @@ import com.ble_finder.utils.DistanceCalculator
 import com.ble_finder.viewmodel.MainViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ble_finder.data.SavedDevice
+import com.ble_finder.activity.SensorActivityRecognition
 import kotlin.math.absoluteValue
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private val bluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
     private val bluetoothAdapter by lazy { bluetoothManager?.adapter }
+    private lateinit var activityRecognition: SensorActivityRecognition
 
     private val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         arrayOf(
@@ -75,6 +78,8 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activityRecognition = SensorActivityRecognition(this)
+        
         setContent {
             MaterialTheme {
                 Surface(
@@ -85,6 +90,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        // Start sensor-based activity recognition
+        activityRecognition.start()
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -93,28 +101,101 @@ class MainActivity : ComponentActivity() {
     fun BLEFinderScreen() {
         val scanResults by viewModel.scanResults.collectAsStateWithLifecycle()
         val savedDevices by viewModel.savedDevices.collectAsStateWithLifecycle()
-        val isScanning by remember { mutableStateOf(viewModel.isScanning()) }
+        var isScanning by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf(0) }
+        val currentActivity by activityRecognition.currentActivity.collectAsStateWithLifecycle()
+        var showBluetoothDialog by remember { mutableStateOf(false) }
+
+        // Update scanning state
+        LaunchedEffect(Unit) {
+            snapshotFlow { viewModel.isScanning() }
+                .collect { scanning ->
+                    isScanning = scanning
+                }
+        }
+
+        // Handle automatic scanning based on selected tab
+        LaunchedEffect(selectedTab) {
+            if (selectedTab == 0) {
+                if (bluetoothAdapter?.isEnabled == true) {
+                    checkPermissionsAndStartScan()
+                } else {
+                    showBluetoothDialog = true
+                }
+            } else {
+                viewModel.stopScan()
+            }
+        }
+
+        // Show dialog if Bluetooth is disabled
+        if (showBluetoothDialog) {
+            AlertDialog(
+                onDismissRequest = { showBluetoothDialog = false },
+                title = { Text("Bluetooth Required") },
+                text = { Text("Please enable Bluetooth to scan for devices.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showBluetoothDialog = false
+                        enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                    }) {
+                        Text("Enable")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showBluetoothDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
 
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = { Text("BLE Beacon Finder") },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                Column {
+                    CenterAlignedTopAppBar(
+                        title = { Text("BLE Beacon Finder") },
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     )
-                )
-            },
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { checkPermissionsAndStartScan() },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocationOn,
-                        contentDescription = if (isScanning) "Stop Scan" else "Start Scan"
-                    )
+                    // Activity status bar
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Activity: $currentActivity",
+                            modifier = Modifier.padding(8.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    // Scanning status bar
+                    if (isScanning) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Scanning for devices... (${scanResults.size} found)",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
                 }
             }
         ) { padding ->
@@ -127,12 +208,12 @@ class MainActivity : ComponentActivity() {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = { Text("Scan Results") }
+                        text = { Text("Scan Results (${scanResults.size})") }
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text("Saved Devices") }
+                        text = { Text("Saved Devices (${savedDevices.size})") }
                     )
                 }
 
@@ -147,7 +228,33 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun ScanResultsList(scanResults: List<ScanResult>, savedDevices: List<SavedDevice>) {
         if (scanResults.isEmpty()) {
-            EmptyState()
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    if (!bluetoothAdapter?.isEnabled!!) {
+                        Text(
+                            text = "Bluetooth is disabled\nPlease enable Bluetooth to scan for devices",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        Text(
+                            text = "Searching for BLE devices...\nMake sure devices are advertising",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        CircularProgressIndicator()
+                    }
+                }
+            }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
@@ -156,7 +263,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 items(
                     scanResults.sortedBy {
-                        DistanceCalculator.calculateDistance(it.rssi, it.txPower)
+                        DistanceCalculator.calculateDistance(it.rssi, it.txPower ?: -59)
                     }
                 ) { result ->
                     val isSaved = savedDevices.any { it.macAddress == result.device.address }
@@ -421,20 +528,6 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun EmptyState() {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "No beacons found\nTap the scan button to start searching",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-
-    @Composable
     fun SignalStrengthIndicator(rssi: Int) {
         val signalStrength = when {
             rssi > -60 -> Color(0xFF4CAF50) // Strong - Green
@@ -494,8 +587,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hasRequiredPermissions(): Boolean {
-        return requiredPermissions.all { permission ->
-            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        return requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 
@@ -505,5 +598,10 @@ class MainActivity : ComponentActivity() {
         } else {
             enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        activityRecognition.stop()
     }
 }
