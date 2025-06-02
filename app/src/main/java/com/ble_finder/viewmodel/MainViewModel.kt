@@ -1,10 +1,12 @@
 package com.ble_finder.viewmodel
 
 import android.app.Application
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.ScanResult
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ble_finder.bluetooth.BLEScanner
+import com.ble_finder.bluetooth.ClassicBluetoothScanner
 import com.ble_finder.data.AppDatabase
 import com.ble_finder.data.DeviceRepository
 import com.ble_finder.data.SavedDevice
@@ -14,15 +16,18 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val bleScanner = BLEScanner(application.applicationContext)
+    private val classicScanner = ClassicBluetoothScanner(application.applicationContext)
     private val repository = DeviceRepository(AppDatabase.getDatabase(application).savedDeviceDao())
     private val notificationHelper = NotificationHelper(application)
 
     val scanResults: StateFlow<List<ScanResult>> = bleScanner.scanResults
+    val classicScanResults: StateFlow<List<BluetoothDevice>> = classicScanner.scanResults
     val savedDevices: StateFlow<List<SavedDevice>> = repository.allSavedDevices
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun startScan() {
         bleScanner.startScan()
+        classicScanner.startScan()
         // Monitor saved devices during scan
         viewModelScope.launch {
             scanResults.collect { results ->
@@ -39,9 +44,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopScan() {
         bleScanner.stopScan()
+        classicScanner.stopScan()
     }
 
-    fun isScanning(): Boolean = bleScanner.isScanning()
+    fun isScanning(): Boolean = bleScanner.isScanning() || classicScanner.isScanning()
 
     fun saveDevice(scanResult: ScanResult) {
         viewModelScope.launch {
@@ -87,5 +93,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         bleScanner.stopScan()
+        classicScanner.cleanup()
     }
 } 

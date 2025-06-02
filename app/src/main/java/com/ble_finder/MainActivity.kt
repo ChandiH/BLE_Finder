@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ble_finder.data.SavedDevice
 import com.ble_finder.activity.SensorActivityRecognition
 import kotlin.math.absoluteValue
+import android.bluetooth.BluetoothDevice
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -100,6 +101,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BLEFinderScreen() {
         val scanResults by viewModel.scanResults.collectAsStateWithLifecycle()
+        val classicScanResults by viewModel.classicScanResults.collectAsStateWithLifecycle()
         val savedDevices by viewModel.savedDevices.collectAsStateWithLifecycle()
         var isScanning by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf(0) }
@@ -208,18 +210,24 @@ class MainActivity : ComponentActivity() {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = { Text("Scan Results (${scanResults.size})") }
+                        text = { Text("BLE Beacons (${scanResults.size})") }
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text("Saved Devices (${savedDevices.size})") }
+                        text = { Text("Classic Devices (${classicScanResults.size})") }
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = { Text("Saved (${savedDevices.size})") }
                     )
                 }
 
                 when (selectedTab) {
                     0 -> ScanResultsList(scanResults, savedDevices)
-                    1 -> SavedDevicesList(savedDevices)
+                    1 -> ClassicBluetoothList(classicScanResults)
+                    2 -> SavedDevicesList(savedDevices)
                 }
             }
         }
@@ -268,6 +276,49 @@ class MainActivity : ComponentActivity() {
                 ) { result ->
                     val isSaved = savedDevices.any { it.macAddress == result.device.address }
                     DeviceItem(result, isSaved)
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun ClassicBluetoothList(devices: List<BluetoothDevice>) {
+        if (devices.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    if (!bluetoothAdapter?.isEnabled!!) {
+                        Text(
+                            text = "Bluetooth is disabled\nPlease enable Bluetooth to scan for devices",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        Text(
+                            text = "Searching for Classic Bluetooth devices...\nMake sure devices are discoverable",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        CircularProgressIndicator()
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(devices) { device ->
+                    ClassicDeviceItem(device)
                 }
             }
         }
@@ -370,6 +421,69 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         SignalStrengthIndicator(result.rssi)
+                    }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun ClassicDeviceItem(device: BluetoothDevice) {
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = device.name ?: "Unknown Device",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = device.address,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = { /* TODO: Add pairing functionality */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Pair Device",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Classic Bluetooth Device",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     }
                 }
             }
