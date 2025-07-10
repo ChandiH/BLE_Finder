@@ -13,6 +13,8 @@ data class SavedDevice(
     val isInRange: Boolean = true,
     val notificationEnabled: Boolean = true,
     val notificationThresholdDistance: Double = 10.0, // Default 10 meters
+    val lastKnownLatitude: Double = 0.0,
+    val lastKnownLongitude: Double = 0.0
 //    val distance: Double,
 //    val deviceType: String,
 ) 

@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.ble_finder.MainActivity
@@ -13,8 +14,7 @@ import com.ble_finder.data.SavedDevice
 
 class NotificationHelper(private val context: Context) {
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val channelId = "ble_finder_channel"
-    private val channelName = "BLE Device Notifications"
+    private val channelId = "device_notifications"
 
     init {
         createNotificationChannel()
@@ -22,36 +22,34 @@ class NotificationHelper(private val context: Context) {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                channelName,
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Notifications for BLE device tracking"
-                enableVibration(true)
+            val name = "Device Notifications"
+            val descriptionText = "Notifications for device range status"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(channelId, name, importance).apply {
+                description = descriptionText
             }
             notificationManager.createNotificationChannel(channel)
         }
     }
 
     fun showDeviceOutOfRangeNotification(device: SavedDevice) {
-        if (!device.notificationEnabled) return
-
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        // Create Google Maps intent
+        val mapsUri = Uri.parse("https://www.google.com/maps?q=${device.lastKnownLatitude},${device.lastKnownLongitude}")
+        val mapsIntent = Intent(Intent.ACTION_VIEW, mapsUri).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-
+        
         val pendingIntent = PendingIntent.getActivity(
             context,
-            0,
-            intent,
+            device.macAddress.hashCode(),
+            mapsIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_notification) // You'll need to create this icon
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Device Out of Range")
-            .setContentText("${device.name} is no longer in range")
+            .setContentText("${device.name} is no longer in range. Tap to view last known location.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

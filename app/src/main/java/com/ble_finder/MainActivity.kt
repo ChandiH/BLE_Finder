@@ -176,7 +176,7 @@ class MainActivity : ComponentActivity() {
             topBar = {
                 Column {
                     CenterAlignedTopAppBar(
-                        title = { Text("BLE Beacon Finder") },
+                        title = { Text("LostLink") },
                         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer

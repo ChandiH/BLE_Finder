@@ -44,15 +44,6 @@ class BLEScanner(private val context: Context) {
     // No filters to see all devices
     private val scanFilters = listOf<ScanFilter>()
 
-    // Mock devices data
-    private val mockDevices = listOf(
-        MockDevice("iBeacon-001", "00:11:22:33:44:55", -65),
-        MockDevice("Eddystone-001", "AA:BB:CC:DD:EE:FF", -72),
-        MockDevice("BLE Sensor", "11:22:33:44:55:66", -58)
-    )
-
-    data class MockDevice(val name: String, val address: String, val rssi: Int)
-
     private val leScanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             Log.d(TAG, "Device found: ${result.device.name ?: "Unknown"} (${result.device.address})")
@@ -89,14 +80,7 @@ class BLEScanner(private val context: Context) {
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Log.e(TAG, "Scan failed with error: $errorCode")
-            scanning = false
-            when (errorCode) {
-                SCAN_FAILED_ALREADY_STARTED -> Log.e(TAG, "Scan already started")
-                SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(TAG, "Application registration failed")
-                SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(TAG, "BLE scanning not supported")
-                SCAN_FAILED_INTERNAL_ERROR -> Log.e(TAG, "Internal error")
-            }
+            Log.e(TAG, "Scan failed with error code: $errorCode")
         }
     }
 
@@ -113,73 +97,19 @@ class BLEScanner(private val context: Context) {
         }
 
         try {
-            // Initialize BluetoothLeScanner
             bluetoothLeScanner = bluetoothAdapter?.bluetoothLeScanner
-            if (bluetoothLeScanner == null) {
-                Log.e(TAG, "BluetoothLeScanner is null")
-                // Even if the scanner is null, we'll still show mock devices
-            }
-
-            // Clear previous results and add mock devices
-            _scanResults.value = emptyList()
-            addMockDevices()
-            
-            // Start scan with settings and filters if scanner is available
-            bluetoothLeScanner?.let { scanner ->
-                scanner.startScan(scanFilters, scanSettings, leScanCallback)
-                Log.d(TAG, "Started BLE scan")
-            }
-            
+            bluetoothLeScanner?.startScan(scanFilters, scanSettings, leScanCallback)
             scanning = true
+            Log.d(TAG, "Started BLE scan")
 
             if (SCAN_PERIOD > 0) {
                 handler.postDelayed({
-                    if (scanning) {
-                        Log.d(TAG, "Scan timeout reached")
-                        stopScan()
-                    }
+                    stopScan()
                 }, SCAN_PERIOD)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error starting scan: ${e.message}")
             scanning = false
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun addMockDevices() {
-        try {
-            val currentList = mutableListOf<ScanResult>()
-            
-            mockDevices.forEach { mockDevice ->
-                val device = bluetoothAdapter?.getRemoteDevice(mockDevice.address)
-                device?.let {
-                    val result = createMockScanResult(it, mockDevice.rssi)
-                    currentList.add(result)
-                    Log.d(TAG, "Added mock device: ${mockDevice.name} (${mockDevice.address})")
-                }
-            }
-            
-            _scanResults.value = currentList
-            Log.d(TAG, "Successfully added ${currentList.size} mock devices")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error adding mock devices: ${e.message}")
-        }
-    }
-
-    private fun createMockScanResult(device: BluetoothDevice, rssi: Int): ScanResult {
-        try {
-            // Create a mock ScanResult using reflection since the constructor is hidden
-            return ScanResult::class.java.getDeclaredConstructor(
-                BluetoothDevice::class.java,
-                Int::class.java,
-                Long::class.java
-            ).apply {
-                isAccessible = true
-            }.newInstance(device, rssi, System.currentTimeMillis())
-        } catch (e: Exception) {
-            Log.e(TAG, "Error creating mock ScanResult: ${e.message}")
-            throw e
         }
     }
 
@@ -197,6 +127,4 @@ class BLEScanner(private val context: Context) {
     }
 
     fun isScanning(): Boolean = scanning
-
-    fun getDeviceCount(): Int = _scanResults.value.size
 } 
