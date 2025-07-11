@@ -25,6 +25,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _saveResult = MutableStateFlow<SaveResult?>(null)
     val saveResult: StateFlow<SaveResult?> = _saveResult.asStateFlow()
 
+    private val _currentActivity = MutableStateFlow("Unknown")
+    val currentActivity: StateFlow<String> = _currentActivity.asStateFlow()
+
     val scanResults: StateFlow<List<ScanResult>> = bleScanner.scanResults
     val savedDevices: StateFlow<List<SavedDevice>> = repository.allSavedDevices
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -34,16 +37,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         data class Error(val message: String) : SaveResult()
     }
 
+    fun setCurrentActivity(activity: String) {
+        _currentActivity.value = activity
+    }
+
     fun startScan() {
         bleScanner.startScan()
         // Monitor saved devices during scan
         viewModelScope.launch {
             scanResults.collect { results ->
+                val isTraveling = _currentActivity.value in listOf("Running", "Walking", "Driving")
                 results.forEach { result ->
                     val savedDevice = repository.getDeviceByMacAddress(result.device.address)
                     if (savedDevice != null) {
                         updateDeviceStatusWithLocation(result)
-                        checkDeviceRange(savedDevice)
+                        if (isTraveling) {
+                            checkDeviceRange(savedDevice)
+                        }
                     }
                 }
             }

@@ -30,7 +30,7 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
     private val DRIVING_ROTATION_THRESHOLD = 0.1f
 
     private var lastActivityUpdate = 0L
-    private val UPDATE_INTERVAL = 5000L // Update activity every 500ms
+    private val UPDATE_INTERVAL = 500L // Update activity every 500ms
 
     data class AccelerometerData(
         val timestamp: Long,
@@ -130,12 +130,6 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
             return
         }
 
-        // Calculate average magnitudes
-        val avgAccMagnitude = accelerometerReadings
-            .map { it.magnitude }
-            .average()
-            .toFloat()
-
         val avgGyroMagnitude = gyroscopeReadings
             .map { it.magnitude }
             .average()
@@ -150,7 +144,7 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
             variance < STANDING_THRESHOLD && avgGyroMagnitude < 0.1f -> "Standing Still"
             
             // Driving: moderate acceleration with consistent gyroscope readings
-            avgGyroMagnitude > DRIVING_ROTATION_THRESHOLD && variance < WALKING_THRESHOLD -> "Driving"
+            avgGyroMagnitude > DRIVING_ROTATION_THRESHOLD && variance < RUNNING_THRESHOLD -> "Driving"
             
             // Running: high acceleration variance
             variance > RUNNING_THRESHOLD -> "Running"
