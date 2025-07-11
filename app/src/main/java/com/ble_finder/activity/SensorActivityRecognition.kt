@@ -150,7 +150,7 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
             variance < STANDING_THRESHOLD && avgGyroMagnitude < 0.1f -> "Standing Still"
             
             // Driving: moderate acceleration with consistent gyroscope readings
-            avgGyroMagnitude > DRIVING_ROTATION_THRESHOLD && variance < WALKING_THRESHOLD -> "Driving"
+            avgGyroMagnitude < DRIVING_ROTATION_THRESHOLD && variance < WALKING_THRESHOLD -> "Driving"
             
             // Running: high acceleration variance
             variance > RUNNING_THRESHOLD -> "Running"
