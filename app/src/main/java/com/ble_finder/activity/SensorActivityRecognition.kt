@@ -30,7 +30,7 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
     private val DRIVING_ROTATION_THRESHOLD = 0.1f
 
     private var lastActivityUpdate = 0L
-    private val UPDATE_INTERVAL = 500L // Update activity every 500ms
+    private val UPDATE_INTERVAL = 5000L // Update activity every 500ms
 
     data class AccelerometerData(
         val timestamp: Long,
@@ -165,4 +165,4 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // Not used in this implementation
     }
-} 
+}
