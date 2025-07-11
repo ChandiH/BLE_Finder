@@ -12,11 +12,15 @@ import com.ble_finder.data.SavedDevice
 import com.ble_finder.utils.NotificationHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import android.location.Location
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val bleScanner = BLEScanner(application.applicationContext)
     private val repository = DeviceRepository(AppDatabase.getDatabase(application).savedDeviceDao())
     private val notificationHelper = NotificationHelper(application)
+    private val fusedLocationClient: FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(application)
 
     private val _saveResult = MutableStateFlow<SaveResult?>(null)
     val saveResult: StateFlow<SaveResult?> = _saveResult.asStateFlow()
@@ -38,7 +42,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 results.forEach { result ->
                     val savedDevice = repository.getDeviceByMacAddress(result.device.address)
                     if (savedDevice != null) {
-                        repository.updateDeviceStatus(result)
+                        updateDeviceStatusWithLocation(result)
                         checkDeviceRange(savedDevice)
                     }
                 }
@@ -98,6 +102,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else if (it.isInRange) {
                     notificationHelper.cancelNotification(it)
                 }
+            }
+        }
+    }
+
+    private fun updateDeviceStatusWithLocation(scanResult: ScanResult) {
+        // Get current location and update device status with lat/lng
+        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+            viewModelScope.launch {
+                val device = repository.getDeviceByMacAddress(scanResult.device.address)
+                if (device != null && location != null) {
+                    repository.updateDeviceStatusWithLocation(
+                        scanResult,
+                        location.latitude,
+                        location.longitude
+                    )
+                } else if (device != null) {
+                    // fallback: update without location
+                    repository.updateDeviceStatus(scanResult)
+                }
+            }
+        }.addOnFailureListener {
+            // fallback: update without location
+            viewModelScope.launch {
+                repository.updateDeviceStatus(scanResult)
             }
         }
     }

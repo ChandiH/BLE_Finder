@@ -45,6 +45,22 @@ class DeviceRepository(private val savedDeviceDao: SavedDeviceDao) {
         }
     }
 
+    suspend fun updateDeviceStatusWithLocation(scanResult: ScanResult, latitude: Double, longitude: Double) {
+        val distance = DistanceCalculator.calculateDistance(scanResult.rssi, scanResult.txPower ?: -59)
+        val device = savedDeviceDao.getDeviceByMacAddress(scanResult.device.address)
+        device?.let {
+            val isInRange = distance <= it.notificationThresholdDistance
+            savedDeviceDao.updateDeviceStatusWithLocation(
+                macAddress = scanResult.device.address,
+                rssi = scanResult.rssi,
+                timestamp = System.currentTimeMillis(),
+                isInRange = isInRange,
+                latitude = latitude,
+                longitude = longitude
+            )
+        }
+    }
+
     suspend fun toggleNotifications(device: SavedDevice, enabled: Boolean) {
         savedDeviceDao.updateNotificationSetting(device.macAddress, enabled)
     }
