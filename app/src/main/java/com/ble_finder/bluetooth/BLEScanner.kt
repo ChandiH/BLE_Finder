@@ -30,8 +30,7 @@ class BLEScanner(private val context: Context) {
     private val _scanResults = MutableStateFlow<List<ScanResult>>(emptyList())
     val scanResults: StateFlow<List<ScanResult>> = _scanResults.asStateFlow()
 
-    // Scan continuously
-    private val SCAN_PERIOD: Long = 0 // 0 means continuous scanning
+    private val SCAN_PERIOD: Long = 0
 
     private val scanSettings = ScanSettings.Builder()
         .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY) // Highest power, fastest scanning

@@ -43,6 +43,7 @@ import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
+    private val refPowerForMeter = -59
     private val viewModel: MainViewModel by viewModels()
     private val bluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
     private val bluetoothAdapter by lazy { bluetoothManager?.adapter }
@@ -286,9 +287,7 @@ class MainActivity : ComponentActivity() {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(
-                    scanResults.sortedBy {
-                        DistanceCalculator.calculateDistance(it.rssi, it.txPower ?: -59)
-                    }
+                    scanResults
                 ) { result ->
                     val isSaved = savedDevices.any { it.macAddress == result.device.address }
                     DeviceItem(result, isSaved)
@@ -327,7 +326,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun DeviceItem(result: ScanResult, isSaved: Boolean) {
-        val distance = DistanceCalculator.calculateDistance(result.rssi, result.txPower ?: -59)
+        val distance = DistanceCalculator.calculateDistance(result.rssi, refPowerForMeter)
 
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -392,6 +391,19 @@ class MainActivity : ComponentActivity() {
                             )
                             Text(
                                 text = "%.2f meters".format(distance),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "RSSI",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = "(%d dBm)".format(result.rssi),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 fontWeight = FontWeight.Bold

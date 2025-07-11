@@ -16,14 +16,10 @@ object DistanceCalculator {
      * @return Estimated distance in meters
      */
     fun calculateDistance(rssi: Int, txPower: Int = -59): Double {
-        if (rssi == 0) {
-            return -1.0 // Invalid RSSI
-        }
+        if (rssi == 0) return -1.0 // Invalid RSSI
 
-        // Using Log-distance path loss model
-        // d = 10^((txPower - rssi)/(10 * N))
         val ratio = (txPower - rssi) / (10.0 * N)
-        return ratio
+        return 10.0.pow(ratio)
     }
 
     /**
