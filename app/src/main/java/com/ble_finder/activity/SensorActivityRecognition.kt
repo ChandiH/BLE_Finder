@@ -82,7 +82,15 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
     }
 
     private fun processAccelerometerData(event: SensorEvent) {
-        val magnitude = calculateMagnitude(event.values[0], event.values[1], event.values[2])
+        val alpha = 0.8f
+        val gravity = FloatArray(3) { 0f }
+        gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0]
+        gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1]
+        gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2]
+        val linearAccX = event.values[0] - gravity[0]
+        val linearAccY = event.values[1] - gravity[1]
+        val linearAccZ = event.values[2] - gravity[2]
+        val magnitude = calculateMagnitude(linearAccX, linearAccY, linearAccZ)
         val data = AccelerometerData(
             event.timestamp,
             event.values[0],
