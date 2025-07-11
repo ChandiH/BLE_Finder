@@ -9,7 +9,7 @@ class DeviceRepository(private val savedDeviceDao: SavedDeviceDao) {
 
     suspend fun saveDevice(scanResult: ScanResult) {
         try {
-            val distance = DistanceCalculator.calculateDistance(scanResult.rssi, scanResult.txPower ?: -59)
+            val distance = DistanceCalculator.calculateDistance(scanResult.rssi, -59)
             val device = SavedDevice(
                 macAddress = scanResult.device.address,
                 name = scanResult.device.name ?: "Unknown Device",
@@ -31,7 +31,7 @@ class DeviceRepository(private val savedDeviceDao: SavedDeviceDao) {
     }
 
     suspend fun updateDeviceStatus(scanResult: ScanResult) {
-        val distance = DistanceCalculator.calculateDistance(scanResult.rssi, scanResult.txPower ?: -59)
+        val distance = DistanceCalculator.calculateDistance(scanResult.rssi, -59)
         val device = savedDeviceDao.getDeviceByMacAddress(scanResult.device.address)
         
         device?.let {
@@ -46,7 +46,7 @@ class DeviceRepository(private val savedDeviceDao: SavedDeviceDao) {
     }
 
     suspend fun updateDeviceStatusWithLocation(scanResult: ScanResult, latitude: Double, longitude: Double) {
-        val distance = DistanceCalculator.calculateDistance(scanResult.rssi, scanResult.txPower ?: -59)
+        val distance = DistanceCalculator.calculateDistance(scanResult.rssi, -59)
         val device = savedDeviceDao.getDeviceByMacAddress(scanResult.device.address)
         device?.let {
             val isInRange = distance <= it.notificationThresholdDistance
