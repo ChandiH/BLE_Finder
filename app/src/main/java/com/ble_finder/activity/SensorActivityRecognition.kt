@@ -166,8 +166,8 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
     }
 
     private fun calculateVariance(values: List<Float>): Float {
-        val mean = values.average()
-        return values.map { (it - mean) * (it - mean) }.average().toFloat()
+        val mean = values.sum() / values.size
+        return values.map { (it - mean) * (it - mean) }.sum() / values.size
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
