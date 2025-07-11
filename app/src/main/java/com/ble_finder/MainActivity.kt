@@ -39,6 +39,8 @@ import com.ble_finder.data.SavedDevice
 import com.ble_finder.activity.SensorActivityRecognition
 import kotlin.math.absoluteValue
 import android.bluetooth.BluetoothDevice
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -405,6 +407,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun SavedDeviceItem(device: SavedDevice) {
+        val context = LocalContext.current
         var showDialog by remember { mutableStateOf(false) }
         var sliderPosition by remember { mutableStateOf(device.notificationThresholdDistance.toFloat()) }
 
@@ -485,6 +488,28 @@ class MainActivity : ComponentActivity() {
                                 contentDescription = "Delete",
                                 tint = MaterialTheme.colorScheme.error
                             )
+                        }
+                        if (device.lastKnownLatitude != 0.0 || device.lastKnownLongitude != 0.0) {
+                            IconButton(onClick = {
+                                val gmmIntentUri = Uri.parse("geo:${device.lastKnownLatitude},${device.lastKnownLongitude}?q=${device.lastKnownLatitude},${device.lastKnownLongitude}(${device.name})")
+                                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                mapIntent.setPackage("com.google.android.apps.maps")
+                                mapIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                try {
+                                    context.startActivity(mapIntent)
+                                } catch (e: Exception) {
+                                    // fallback: open in any map app
+                                    val fallbackIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                    fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(fallbackIntent)
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = "Show Last Known Location",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }
