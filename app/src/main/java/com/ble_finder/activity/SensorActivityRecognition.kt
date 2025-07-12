@@ -14,7 +14,7 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-
+    private val gravity = FloatArray(3) { 0f }
     private val _currentActivity = MutableStateFlow<String>("Unknown")
     val currentActivity: StateFlow<String> = _currentActivity.asStateFlow()
 
@@ -83,10 +83,11 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
 
     private fun processAccelerometerData(event: SensorEvent) {
         val alpha = 0.8f
-        val gravity = FloatArray(3) { 0f }
+
         gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0]
         gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1]
         gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2]
+
         val linearAccX = event.values[0] - gravity[0]
         val linearAccY = event.values[1] - gravity[1]
         val linearAccZ = event.values[2] - gravity[2]
@@ -150,7 +151,7 @@ class SensorActivityRecognition(context: Context) : SensorEventListener {
             variance > RUNNING_THRESHOLD -> "Running"
             
             // Walking: moderate acceleration variance
-            variance > WALKING_THRESHOLD -> "Walking"
+            variance > STANDING_THRESHOLD -> "Walking"
             
             // Default case
             else -> "Unknown"
